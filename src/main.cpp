@@ -43,6 +43,20 @@ const unsigned char epd_bitmap_orca [] PROGMEM = {
 };
 
 /**
+ * Definição dos estados possíveis do sistema operacional.
+ */
+enum system_state_enum {
+    STATE_SPLASH,
+    STATE_MENU,
+    STATE_AI
+};
+
+// Variáveis globais de controle de estado e navegação
+system_state_enum current_system_state = STATE_SPLASH;
+unsigned long splash_start_time = 0;
+int selected_menu_index = 0;
+
+/**
  * Renderiza a imagem de inicialização (Splash Screen) do ORCA na tela.
  *
  * @param int screen_x Posição no eixo X para ancorar a imagem na tela.
@@ -62,28 +76,52 @@ void render_orca_splash(int screen_x, int screen_y) {
 }
 
 /**
+ * Renderiza a interface do menu principal.
+ *
+ * @return void
+ * * Regra de negócio: Limpa a tela e redesenha as opções. Inverte as cores 
+ * do item selecionado para fornecer feedback visual imediato ao usuário.
+ */
+void render_main_menu() {
+    M5Cardputer.Display.fillScreen(TFT_BLACK);
+    M5Cardputer.Display.setTextSize(2);
+    
+    // Cabeçalho
+    M5Cardputer.Display.setTextColor(TFT_GREEN, TFT_BLACK);
+    M5Cardputer.Display.setCursor(10, 10);
+    M5Cardputer.Display.println("ORCA OS");
+    M5Cardputer.Display.drawLine(10, 30, 230, 30, TFT_GREEN);
+    
+    // Opção 1: Inteligência Artificial (Selecionada por padrão)
+    if (selected_menu_index == 0) {
+        // Fundo verde, texto preto (Highlight)
+        M5Cardputer.Display.setTextColor(TFT_BLACK, TFT_GREEN); 
+    } else {
+        M5Cardputer.Display.setTextColor(TFT_GREEN, TFT_BLACK);
+    }
+    
+    M5Cardputer.Display.setCursor(10, 45);
+    M5Cardputer.Display.println("> 1. IA DeepSeek");
+    
+    // Reseta a cor para o padrão para evitar bugs em telas futuras
+    M5Cardputer.Display.setTextColor(TFT_GREEN, TFT_BLACK);
+}
+
+/**
  * Prepara o hardware e exibe a interface inicial do sistema.
  *
  * @return void
- * * Regra de negócio: Função responsável por configurar rotação, cores e 
- * renderizar a Splash Screen. Atua como o "construtor" da interface 
- * antes de delegar o fluxo para os Listeners de hardware no loop principal.
  */
 void initialize_orca_system() {
     auto m5_cfg = M5.config();
     M5Cardputer.begin(m5_cfg, true);
     
-    // Configurações do Display
     M5Cardputer.Display.setRotation(1);
     M5Cardputer.Display.fillScreen(TFT_BLACK);
-    
-    // Centraliza a orca (240px largura / 2) - (64px / 2) = 88
     render_orca_splash(88, 10); 
     
     M5Cardputer.Display.setTextColor(TFT_GREEN);
     M5Cardputer.Display.setTextSize(2);
-    
-    // Posiciona e imprime o nome do sistema
     M5Cardputer.Display.setCursor(30, 85);
     M5Cardputer.Display.println("ORCA SYSTEM v1.0");
 }
@@ -97,17 +135,47 @@ void initialize_orca_system() {
  */
 void setup() {
     initialize_orca_system();
+    splash_start_time = millis();
 }
 
 /**
  * Laço de execução contínua do sistema operacional.
  *
  * @return void
- * * Regra de negócio: Atualiza o estado da placa iterativamente para garantir 
- * a leitura de eventos físicos (Events/Listeners) como pressões no teclado.
+ * * Regra de negócio: Implementa uma Máquina de Estados (State Machine).
+ * A lógica de renderização e captura de botões muda dependendo da tela ativa.
  */
 void loop() {
     M5Cardputer.update();
     
-    // Listeners futuros entrarão aqui
+    // ESTADO 1: Tela de Carregamento (Splash)
+    if (current_system_state == STATE_SPLASH) {
+        // Aguarda 3000 milissegundos (3 segundos) e muda de tela
+        if (millis() - splash_start_time > 3000) {
+            current_system_state = STATE_MENU;
+            render_main_menu();
+        }
+    }
+    
+    // ESTADO 2: Menu Principal
+    else if (current_system_state == STATE_MENU) {
+        // Verifica se alguma tecla sofreu interação
+        if (M5Cardputer.Keyboard.isChange() && M5Cardputer.Keyboard.isPressed()) {
+            
+            // Verifica se a tecla Enter foi pressionada
+            if (M5Cardputer.Keyboard.isKeyPressed(KEY_ENTER)) {
+                
+                if (selected_menu_index == 0) {
+                    // Transição para o app da IA
+                    current_system_state = STATE_AI;
+                    M5Cardputer.Display.fillScreen(TFT_BLACK);
+                    M5Cardputer.Display.setCursor(10, 10);
+                    M5Cardputer.Display.println("Iniciando IA...");
+                    M5Cardputer.Display.setCursor(10, 35);
+                    M5Cardputer.Display.setTextSize(1);
+                    M5Cardputer.Display.println("Aguardando conexao...");
+                }
+            }
+        }
+    }
 }
